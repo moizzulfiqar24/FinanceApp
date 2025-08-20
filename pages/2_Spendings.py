@@ -27,7 +27,6 @@ CATEGORIES = [
     "Other",
 ]
 
-
 accounts = list_bank_accounts()
 account_options = {f"{r['title']} (#{r['id']})": int(r["id"]) for _, r in accounts.iterrows()}
 
@@ -36,6 +35,7 @@ with st.form("spending_form", clear_on_submit=True):
     title = col1.text_input("Title", placeholder="Groceries / AWS / Uber etc.")
     category_choice = col2.selectbox("Category", CATEGORIES, index=0)
 
+    # "Other" -> custom category input
     category = category_choice
     if category_choice == "Other":
         category = st.text_input("Custom Category", placeholder="Enter category")
@@ -48,6 +48,7 @@ with st.form("spending_form", clear_on_submit=True):
     dt = col5.date_input("Date", value=date.today())
     pay_method = col6.radio("Payment Method", ["Online", "IBFT", "Cash"], horizontal=True)
 
+    # Bank account selection only for Online/IBFT
     bank_acc_id = None
     if pay_method in ("Online", "IBFT"):
         if accounts.empty:
@@ -55,6 +56,9 @@ with st.form("spending_form", clear_on_submit=True):
         else:
             bank_label = st.selectbox("Bank Account Used", list(account_options.keys()))
             bank_acc_id = account_options[bank_label]
+    else:
+        # Cash -> explicitly ensure NULL goes to DB
+        bank_acc_id = None
 
     save = st.form_submit_button("Save Spending")
 
@@ -68,8 +72,10 @@ if save:
 
     amt_usd = None
     if amt_usd_str.strip():
-        try: amt_usd = float(amt_usd_str)
-        except: st.error("Amount - USD must be a number (e.g., 12.50)."); st.stop()
+        try:
+            amt_usd = float(amt_usd_str)
+        except:
+            st.error("Amount - USD must be a number (e.g., 12.50)."); st.stop()
 
     err = add_spending(
         title=title,
@@ -78,6 +84,6 @@ if save:
         amount_usd=amt_usd,
         dt=dt,
         payment_method=pay_method,
-        bank_account_id=bank_acc_id,
+        bank_account_id=bank_acc_id,  # Cash => None (NULL)
     )
     st.success("Spending saved.") if not err else st.error(f"Save failed: {err}")
