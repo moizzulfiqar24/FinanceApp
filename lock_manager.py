@@ -5,7 +5,7 @@ import json, os
 
 LOCK_FILE = ".lock.json"
 load_dotenv()
-PIN = os.getenv("APP_PIN", "1234")
+PIN = os.getenv("APP_PIN")
 
 def get_lock() -> bool:
     if not os.path.exists(LOCK_FILE):
