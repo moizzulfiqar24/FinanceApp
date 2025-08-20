@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import psycopg
 from psycopg.rows import dict_row
+import socket  # <-- add
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -10,10 +11,22 @@ ALLOWED_TYPES = ("Payroll", "Primary", "Secondary", "Mobile Wallet")
 ALLOWED_PAY_METHODS = ("Online", "IBFT", "Cash")
 ALLOWED_SUB_TYPES = ("single", "monthly", "yearly", "lifetime")
 
+# def get_conn():
+#     if not DATABASE_URL:
+#         raise RuntimeError("DATABASE_URL not set in .env")
+#     return psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row)
+
 def get_conn():
     if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL not set in .env")
-    return psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row)
+        raise RuntimeError("DATABASE_URL not set")
+    # Force IPv4 + SSL (sslmode from DSN still OK)
+    return psycopg.connect(
+        DATABASE_URL,
+        autocommit=True,
+        row_factory=dict_row,
+        gai_family=socket.AF_INET,   # <-- force IPv4
+        connect_timeout=15,
+    )
 
 def init_db():
     with get_conn() as conn, conn.cursor() as cur:
