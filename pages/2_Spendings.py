@@ -2,30 +2,10 @@ import streamlit as st
 from datetime import date
 from DB.queries import add_spending, list_bank_accounts
 from DB.database import init_db
-
-from lock_manager import get_lock, set_lock
-import streamlit as st, os
-from dotenv import load_dotenv
-
-load_dotenv()
-PIN = os.getenv("APP_PIN", "1234")
-
-if get_lock():
-    st.title("🔒 Locked")
-    pin_input = st.text_input("Enter PIN", type="password")
-    if st.button("Unlock"):
-        if pin_input == PIN:
-            set_lock(False)
-            st.rerun()
-        else:
-            st.error("Wrong PIN")
-    st.stop()
-
-if st.sidebar.button("🔒 Hide App"):
-    set_lock(True)
-    st.rerun()
+from lock_manager import lock_guard
 
 st.set_page_config(page_title="Spendings", page_icon="💸", layout="wide")
+lock_guard()
 init_db()
 
 # Sidebar navigation

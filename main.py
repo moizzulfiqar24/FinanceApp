@@ -3,8 +3,12 @@ import pandas as pd
 import altair as alt
 from DB.database import init_db
 from DB.queries import get_spendings_df
+from lock_manager import lock_guard
 
 st.set_page_config(page_title="Finance Dashboard", page_icon="📊", layout="wide")
+
+# Enforce lock/unlock at start
+lock_guard()
 
 # Init DB + seed
 init_db()

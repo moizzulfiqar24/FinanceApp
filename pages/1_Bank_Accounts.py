@@ -1,30 +1,10 @@
 import streamlit as st
 from DB.queries import list_bank_accounts, create_bank_account, update_bank_account, delete_bank_account
 from DB.database import ALLOWED_TYPES, init_db
-
-from lock_manager import get_lock, set_lock
-import streamlit as st, os
-from dotenv import load_dotenv
-
-load_dotenv()
-PIN = os.getenv("APP_PIN", "1234")
-
-if get_lock():
-    st.title("🔒 Locked")
-    pin_input = st.text_input("Enter PIN", type="password")
-    if st.button("Unlock"):
-        if pin_input == PIN:
-            set_lock(False)
-            st.rerun()
-        else:
-            st.error("Wrong PIN")
-    st.stop()
-
-if st.sidebar.button("🔒 Hide App"):
-    set_lock(True)
-    st.rerun()
+from lock_manager import lock_guard
 
 st.set_page_config(page_title="Bank Accounts", page_icon="🏦", layout="wide")
+lock_guard()
 init_db()
 
 # Sidebar navigation
