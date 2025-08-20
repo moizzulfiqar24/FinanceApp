@@ -17,6 +17,7 @@ init_db()
 st.sidebar.page_link("main.py", label="📊 Dashboard")
 st.sidebar.page_link("pages/1_Bank_Accounts.py", label="🏦 Bank Accounts")
 st.sidebar.page_link("pages/2_Spendings.py", label="💸 Spendings")
+st.sidebar.page_link("pages/3_Subscriptions.py", label="📬 Subscriptions")
 
 st.title("📊 Dashboard")
 

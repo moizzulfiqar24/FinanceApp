@@ -12,6 +12,7 @@ init_db()
 st.sidebar.page_link("main.py", label="📊 Dashboard")
 st.sidebar.page_link("pages/1_Bank_Accounts.py", label="🏦 Bank Accounts")
 st.sidebar.page_link("pages/2_Spendings.py", label="💸 Spendings")
+st.sidebar.page_link("pages/3_Subscriptions.py", label="📬 Subscriptions")
 
 st.title("💸 Add Spending")
 
@@ -60,7 +61,7 @@ with st.form("spending_form", clear_on_submit=True):
         # Cash -> explicitly ensure NULL goes to DB
         bank_acc_id = None
 
-    save = st.form_submit_button("Save Spending")
+    save = st.form_submit_button("Save Spending", use_container_width=True)
 
 if save:
     if not title.strip():
@@ -87,3 +88,4 @@ if save:
         bank_account_id=bank_acc_id,  # Cash => None (NULL)
     )
     st.success("Spending saved.") if not err else st.error(f"Save failed: {err}")
+    st.rerun()  
