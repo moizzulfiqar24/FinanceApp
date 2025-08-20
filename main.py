@@ -1,39 +1,57 @@
 import streamlit as st
-import os
-from dotenv import load_dotenv
+import pandas as pd
+import altair as alt
 from DB.database import init_db
-from app_pages import page1_bank_accounts, page2_spendings, page3_dashboard
+from DB.queries import get_spendings_df
 
-load_dotenv()
-PIN = os.getenv("APP_PIN", "1234")  # fallback default
+st.set_page_config(page_title="Finance Dashboard", page_icon="📊", layout="wide")
 
-st.set_page_config(page_title="Personal Finance – Simple App", page_icon="💼", layout="wide")
-
-# Ensure DB & seed
+# Init DB + seed
 init_db()
 
-# --- PIN lock ---
-if "unlocked" not in st.session_state:
-    st.session_state.unlocked = False
+# Sidebar navigation
+st.sidebar.page_link("main.py", label="📊 Dashboard")
+st.sidebar.page_link("pages/1_Bank_Accounts.py", label="🏦 Bank Accounts")
+st.sidebar.page_link("pages/2_Spendings.py", label="💸 Spendings")
 
-if not st.session_state.unlocked:
-    st.title("🔒 Enter PIN to Unlock")
-    pin_input = st.text_input("PIN", type="password")
-    if st.button("Unlock"):
-        if pin_input == PIN:
-            st.session_state.unlocked = True
-            st.success("Unlocked! 🎉")
-            st.rerun()
-        else:
-            st.error("Incorrect PIN")
+st.title("📊 Dashboard")
+
+df = get_spendings_df()
+if df.empty:
+    st.info("No spendings yet.")
     st.stop()
 
-# --- If unlocked, show full app ---
-PAGES = {
-    "Bank Accounts": page1_bank_accounts,
-    "Spendings": page2_spendings,
-    "Dashboard": page3_dashboard,
-}
+# KPIs
+col1, col2, col3 = st.columns(3)
+col1.metric("Total spend (PKR)", f"{df['amount_pkr'].sum():,.0f}")
+col2.metric("Entries", f"{len(df)}")
+col3.metric("Categories", f"{df['category'].nunique()}")
 
-choice = st.sidebar.radio("Navigation", list(PAGES.keys()), label_visibility="collapsed")
-PAGES[choice].render()
+# By Category
+st.subheader("By Category")
+by_cat = (df.groupby("category", as_index=False)["amount_pkr"].sum()
+            .sort_values("amount_pkr", ascending=False))
+chart_cat = alt.Chart(by_cat).mark_bar().encode(
+    x=alt.X("category:N", sort="-y", title="Category"),
+    y=alt.Y("amount_pkr:Q", title="Total PKR"),
+    tooltip=["category", alt.Tooltip("amount_pkr:Q", format=",.0f")]
+).properties(height=320)
+st.altair_chart(chart_cat, use_container_width=True)
+
+# Daily Trend
+st.subheader("Daily Trend")
+df["date"] = pd.to_datetime(df["date"]).dt.date
+daily = df.groupby("date", as_index=False)["amount_pkr"].sum()
+chart_daily = alt.Chart(daily).mark_line(point=True).encode(
+    x=alt.X("date:T", title="Date"),
+    y=alt.Y("amount_pkr:Q", title="PKR"),
+    tooltip=[alt.Tooltip("date:T"), alt.Tooltip("amount_pkr:Q", format=",.0f")]
+).properties(height=320)
+st.altair_chart(chart_daily, use_container_width=True)
+
+# Recent
+st.subheader("Recent Entries")
+show = df[["date","title","category","amount_pkr","payment_method","bank_title"]].rename(
+    columns={"date":"Date","title":"Title","category":"Category","amount_pkr":"PKR","payment_method":"Method","bank_title":"Bank"}
+)
+st.dataframe(show, hide_index=True, use_container_width=True)
