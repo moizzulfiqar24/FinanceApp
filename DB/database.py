@@ -16,15 +16,39 @@ ALLOWED_SUB_TYPES = ("single", "monthly", "yearly", "lifetime")
 #         raise RuntimeError("DATABASE_URL not set in .env")
 #     return psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row)
 
+# def get_conn():
+#     if not DATABASE_URL:
+#         raise RuntimeError("DATABASE_URL not set in .env")
+#     # Force IPv4 + keep SSL (sslmode from DSN still applies)
+#     return psycopg.connect(
+#         DATABASE_URL,
+#         autocommit=True,
+#         row_factory=dict_row,
+#         gai_family=socket.AF_INET,   # <-- force IPv4
+#         connect_timeout=15,
+#     )
+
+
 def get_conn():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL not set in .env")
-    # Force IPv4 + keep SSL (sslmode from DSN still applies)
+    # Prefer env vars separately (set these in Render)
+    host = os.getenv("DB_HOST")          # e.g. db.xxxxx.supabase.co
+    dbname = os.getenv("DB_NAME", "postgres")
+    user = os.getenv("DB_USER", "postgres")
+    password = os.getenv("DB_PASSWORD")  # your Supabase password
+
+    if not (host and password):
+        raise RuntimeError("DB_HOST/DB_PASSWORD not set")
+
     return psycopg.connect(
-        DATABASE_URL,
+        host=host,
+        port=5432,
+        dbname=dbname,
+        user=user,
+        password=password,
+        sslmode="require",
         autocommit=True,
         row_factory=dict_row,
-        gai_family=socket.AF_INET,   # <-- force IPv4
+        gai_family=socket.AF_INET,   # force IPv4
         connect_timeout=15,
     )
 
