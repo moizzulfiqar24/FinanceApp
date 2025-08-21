@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 import psycopg
 from psycopg.rows import dict_row
-# import socket  # <-- add
+import socket  # <-- add
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
