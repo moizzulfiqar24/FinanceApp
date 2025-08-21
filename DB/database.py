@@ -1,54 +1,65 @@
 import os
+import socket
+import logging
+from urllib.parse import urlparse, unquote
 from dotenv import load_dotenv
 import psycopg
 from psycopg.rows import dict_row
-import socket  # <-- add
 
+# Load .env locally (has no effect on Render; that's fine)
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
 
+# App-wide constants
 ALLOWED_TYPES = ("Payroll", "Primary", "Secondary", "Mobile Wallet")
 ALLOWED_PAY_METHODS = ("Online", "IBFT", "Cash")
 ALLOWED_SUB_TYPES = ("single", "monthly", "yearly", "lifetime")
 
-# def get_conn():
-#     if not DATABASE_URL:
-#         raise RuntimeError("DATABASE_URL not set in .env")
-#     return psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row)
+# Optional lightweight logging so you can see what config path was used
+log = logging.getLogger("db")
+logging.basicConfig(level=logging.INFO)
 
-# def get_conn():
-#     if not DATABASE_URL:
-#         raise RuntimeError("DATABASE_URL not set in .env")
-#     # Force IPv4 + keep SSL (sslmode from DSN still applies)
-#     return psycopg.connect(
-#         DATABASE_URL,
-#         autocommit=True,
-#         row_factory=dict_row,
-#         gai_family=socket.AF_INET,   # <-- force IPv4
-#         connect_timeout=15,
-#     )
+def _from_database_url():
+    """Parse DATABASE_URL if provided (preferred for Aiven)."""
+    dsn = (os.getenv("DATABASE_URL") or "").strip()
+    if not dsn:
+        return None
+    u = urlparse(dsn)
+    if not (u.scheme and u.hostname):
+        return None
+    return dict(
+        host=u.hostname,
+        port=u.port or 5432,
+        dbname=(u.path.lstrip("/") or "postgres"),
+        user=unquote(u.username) if u.username else "postgres",
+        password=unquote(u.password) if u.password else None,
+    )
 
+def _from_split_env():
+    """Support separate vars if you prefer not to use a single DATABASE_URL."""
+    host = (os.getenv("DB_HOST") or "").strip()
+    port = int(os.getenv("DB_PORT") or 5432)
+    dbname = (os.getenv("DB_NAME") or "postgres").strip()
+    user = (os.getenv("DB_USER") or "postgres").strip()
+    password = os.getenv("DB_PASSWORD")
+    if host and password:
+        return dict(host=host, port=port, dbname=dbname, user=user, password=password)
+    return None
 
 def get_conn():
-    # Prefer env vars separately (set these in Render)
-    host = os.getenv("DB_HOST")          # e.g. db.xxxxx.supabase.co
-    dbname = os.getenv("DB_NAME", "postgres")
-    user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASSWORD")  # your Supabase password
+    cfg = _from_database_url() or _from_split_env()
+    log.info("DB host seen: %r | via: %s",
+             (cfg or {}).get("host"),
+             "DATABASE_URL" if _from_database_url() else ("split" if _from_split_env() else "none"))
+    if not cfg or not cfg.get("host") or not cfg.get("password"):
+        raise RuntimeError("Database config not found. Set DATABASE_URL, or DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD")
 
-    if not (host and password):
-        raise RuntimeError("DB_HOST/DB_PASSWORD not set")
-
+    # Force IPv4 (Render egress is IPv4), require SSL
     return psycopg.connect(
-        host=host,
-        port=5432,
-        dbname=dbname,
-        user=user,
-        password=password,
+        **cfg,
         sslmode="require",
         autocommit=True,
         row_factory=dict_row,
-        gai_family=socket.AF_INET,   # force IPv4
+        gai_family=socket.AF_INET,
         connect_timeout=15,
     )
 
