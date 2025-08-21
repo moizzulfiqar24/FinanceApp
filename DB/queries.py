@@ -240,18 +240,8 @@ def _send_email(subject:str, body:str) -> Optional[str]:
     except Exception as e:
         return str(e)
 
-def _is_alert_time() -> bool:
-    """Check if current time is exactly 9:00 PM PKT (within 1 hour window)"""
-    now = datetime.now(TZ)
-    return now.hour == ALERT_HOUR
-
 def run_due_alerts():
-    """Send due alerts ONLY at 9:00 PM PKT (idempotent via subscription_alerts uniqueness)."""
-    
-    # Only check/send alerts if it's the right time
-    if not _is_alert_time():
-        return
-    
+    """Send due alerts (idempotent via subscription_alerts uniqueness)."""
     now = datetime.now(TZ)
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
@@ -267,8 +257,6 @@ def run_due_alerts():
         for s in subs:
             expiry = s["expiry_date"]
             due_at = _alert_due_at(expiry)
-            
-            # Only send if we're past the due time AND it's 9 PM
             if now >= due_at:
                 cur.execute("""
                     SELECT 1 FROM subscription_alerts
