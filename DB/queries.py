@@ -5,14 +5,18 @@ from email.message import EmailMessage
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
+import streamlit as st
 
 from .database import get_conn, ALLOWED_TYPES, ALLOWED_PAY_METHODS, ALLOWED_SUB_TYPES
 
 TZ = ZoneInfo("Asia/Karachi")
 ALERT_HOUR = 21  # 9 PM PKT
 ALERT_RECIPIENT = "moiz.zulfiqar@hotmail.com"
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
+# GMAIL_USER = os.getenv("GMAIL_USER")
+# GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
+
+GMAIL_USER = (st.secrets.get("GMAIL_USER") if hasattr(st, "secrets") else None) or os.getenv("GMAIL_USER")
+GMAIL_APP_PASS = (st.secrets.get("GMAIL_APP_PASS") if hasattr(st, "secrets") else None) or os.getenv("GMAIL_APP_PASS")
 
 # ---------------- BANK ACCOUNTS ----------------
 def list_bank_accounts() -> pd.DataFrame:
