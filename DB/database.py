@@ -1,25 +1,17 @@
 import os
 import socket
-import logging
 from urllib.parse import urlparse, unquote
 from dotenv import load_dotenv
 import psycopg
 from psycopg.rows import dict_row
 
-# Load .env locally (has no effect on Render; that's fine)
 load_dotenv()
 
-# App-wide constants
 ALLOWED_TYPES = ("Payroll", "Primary", "Secondary", "Mobile Wallet")
 ALLOWED_PAY_METHODS = ("Online", "IBFT", "Cash")
 ALLOWED_SUB_TYPES = ("single", "monthly", "yearly", "lifetime")
 
-# Optional lightweight logging so you can see what config path was used
-log = logging.getLogger("db")
-logging.basicConfig(level=logging.INFO)
-
 def _from_database_url():
-    """Parse DATABASE_URL if provided (preferred for Aiven)."""
     dsn = (os.getenv("DATABASE_URL") or "").strip()
     if not dsn:
         return None
@@ -35,7 +27,6 @@ def _from_database_url():
     )
 
 def _from_split_env():
-    """Support separate vars if you prefer not to use a single DATABASE_URL."""
     host = (os.getenv("DB_HOST") or "").strip()
     port = int(os.getenv("DB_PORT") or 5432)
     dbname = (os.getenv("DB_NAME") or "postgres").strip()
@@ -45,21 +36,34 @@ def _from_split_env():
         return dict(host=host, port=port, dbname=dbname, user=user, password=password)
     return None
 
+def _ipv4_hostaddr(host: str, port: int) -> str | None:
+    """Resolve an IPv4 address for host; return None if not available."""
+    try:
+        infos = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+        if infos:
+            return infos[0][4][0]  # ip string
+    except Exception:
+        pass
+    return None
+
 def get_conn():
     cfg = _from_database_url() or _from_split_env()
-    log.info("DB host seen: %r | via: %s",
-             (cfg or {}).get("host"),
-             "DATABASE_URL" if _from_database_url() else ("split" if _from_split_env() else "none"))
     if not cfg or not cfg.get("host") or not cfg.get("password"):
         raise RuntimeError("Database config not found. Set DATABASE_URL, or DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD")
 
-    # Force IPv4 (Render egress is IPv4), require SSL
+    # Try to resolve an IPv4 address; if found, pass via hostaddr to ensure IPv4.
+    hostaddr = _ipv4_hostaddr(cfg["host"], cfg["port"])
+
     return psycopg.connect(
-        **cfg,
+        host=cfg["host"],
+        hostaddr=hostaddr,            # safe: if None, libpq ignores it
+        port=cfg["port"],
+        dbname=cfg["dbname"],
+        user=cfg["user"],
+        password=cfg["password"],
         sslmode="require",
         autocommit=True,
         row_factory=dict_row,
-        gai_family=socket.AF_INET,
         connect_timeout=15,
     )
 
