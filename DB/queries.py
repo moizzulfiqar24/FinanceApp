@@ -129,7 +129,7 @@ def get_spendings_df() -> pd.DataFrame:
     return df
 
 def get_spendings_month(year:int, month:int) -> pd.DataFrame:
-    """Convenience helper: current page needs month-wise view."""
+    """Month-wise view, descending by date."""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT s.id, s.title, s.category, s.amount_usd, s.amount_pkr, s.date,
@@ -137,8 +137,8 @@ def get_spendings_month(year:int, month:int) -> pd.DataFrame:
                    b.title AS bank_title
             FROM spendings s
             LEFT JOIN bank_accounts b ON b.id = s.bank_account_id
-            WHERE date >= DATE %s
-              AND date < (DATE %s + INTERVAL '1 month')
+            WHERE s.date >= %s::date
+              AND s.date <  (%s::date + INTERVAL '1 month')
             ORDER BY s.date DESC, s.id DESC
         """, (f"{year}-{month:02d}-01", f"{year}-{month:02d}-01"))
         rows = cur.fetchall()

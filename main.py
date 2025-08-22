@@ -27,12 +27,12 @@ if df.empty:
     st.stop()
 
 # KPIs
-col1, col2, col3 = st.columns(3)
-col1.metric("Total spend (PKR)", f"{df['amount_pkr'].sum():,.0f}")
-col2.metric("Entries", f"{len(df)}")
-col3.metric("Categories", f"{df['category'].nunique()}")
+# col1, col2, col3 = st.columns(3)
+# col1.metric("Total spend (PKR)", f"{df['amount_pkr'].sum():,.0f}")
+# col2.metric("Entries", f"{len(df)}")
+# col3.metric("Categories", f"{df['category'].nunique()}")
 
-st.divider()
+# st.divider()
 
 # ---- CHART 1: Total spendings by month (bar) ----
 st.subheader("Total Spendings by Month")

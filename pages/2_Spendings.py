@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date, datetime
+from datetime import date
 import pandas as pd
 
 from DB.queries import (
@@ -44,8 +44,8 @@ if "edit_spending_id" not in st.session_state:
 
 def move_month(delta: int):
     y, m = st.session_state.sp_year, st.session_state.sp_month
-    dt = date(y, m, 15)
-    new = (dt.replace(day=1) + pd.DateOffset(months=delta)).date()
+    dt = pd.Timestamp(year=y, month=m, day=15)
+    new = (dt + pd.DateOffset(months=delta)).to_pydatetime().date().replace(day=1)
     st.session_state.sp_year, st.session_state.sp_month = new.year, new.month
 
 # ---------------------- Add Spending ----------------------
@@ -60,17 +60,17 @@ with st.form("spending_form", clear_on_submit=True):
     category_choice = col2.selectbox("Category", CATEGORIES, index=0)
     category = category_choice if category_choice != "Other" else st.text_input("Custom Category", placeholder="Enter category")
 
+    # >>> In-Office immediately after category, Yes/No radio (horizontal)
+    in_office_radio = st.radio("In-Office Purchase?", ["Yes", "No"], index=1, horizontal=True)
+    in_office = (in_office_radio == "Yes")
+
     col3, col4 = st.columns([1, 1])
     amt_usd_str = col3.text_input("Amount - USD (optional)", placeholder="e.g., 5.00")
     amt_pkr = col4.number_input("Amount - PKR (required)", min_value=0.0, step=100.0, value=0.0)
 
     col5, col6 = st.columns([1, 2])
-    dt = col5.date_input("Date", value=today)
+    dt_val = col5.date_input("Date", value=today)
     pay_method = col6.radio("Payment Method", ["Online", "IBFT", "Cash"], horizontal=True)
-
-    col7, col8 = st.columns([1, 1])
-    in_office_choice = col7.selectbox("In-Office Purchase?", ["No", "Yes"], index=0)
-    in_office = (in_office_choice == "Yes")
 
     # Bank account selection only for Online/IBFT
     bank_acc_id = None
@@ -78,7 +78,7 @@ with st.form("spending_form", clear_on_submit=True):
         if accounts.empty:
             st.warning("No bank accounts available. Add one on the Bank Accounts page.")
         else:
-            bank_label = col8.selectbox("Bank Account Used", list(account_options.keys()))
+            bank_label = st.selectbox("Bank Account Used", list(account_options.keys()))
             bank_acc_id = account_options[bank_label]
     else:
         bank_acc_id = None
@@ -92,6 +92,7 @@ if save:
         st.error("Category is required."); st.stop()
     if amt_pkr <= 0:
         st.error("Amount - PKR must be greater than 0."); st.stop()
+
     amt_usd = None
     if amt_usd_str.strip():
         try:
@@ -104,9 +105,9 @@ if save:
         category=category,
         amount_pkr=float(amt_pkr),
         amount_usd=amt_usd,
-        dt=dt,
+        dt=dt_val,
         payment_method=pay_method,
-        bank_account_id=bank_acc_id,
+        bank_account_id=bank_acc_id,  # Cash => None (NULL)
         in_office=in_office,
     )
     st.success("Spending saved.") if not err else st.error(f"Save failed: {err}")
@@ -144,7 +145,6 @@ else:
     st.dataframe(show.drop(columns=["ID"]), hide_index=True, use_container_width=True)
 
     st.markdown("##### Click ✏️ to edit an entry")
-    # Simple list with per-row pencil button
     for _, r in show.iterrows():
         colA, colB = st.columns([0.15, 0.85])
         if colA.button("✏️", key=f"edit_{int(r['ID'])}", help="Edit this entry"):
@@ -157,7 +157,6 @@ if st.session_state.edit_spending_id is not None:
     sid = st.session_state.edit_spending_id
     cur = month_df[month_df["id"] == sid]
     if cur.empty:
-        # If selected from another month via session, reload from DB month again or clear
         st.session_state.edit_spending_id = None
         st.rerun()
     row = cur.iloc[0]
@@ -170,6 +169,9 @@ if st.session_state.edit_spending_id is not None:
         title_e = e1.text_input("Title", value=row["title"])
         category_e = e2.text_input("Category", value=row["category"])
 
+        # In-Office radio right after category (horizontal Yes/No)
+        in_office_e_radio = st.radio("In-Office Purchase?", ["Yes","No"], index=(0 if bool(row["in_office"]) else 1), horizontal=True)
+
         e3, e4 = st.columns([1,1])
         usd_e = e3.text_input("Amount - USD (optional)", value="" if pd.isna(row["amount_usd"]) else str(row["amount_usd"]))
         pkr_e = e4.number_input("Amount - PKR (required)", min_value=0.0, step=100.0, value=float(row["amount_pkr"]))
@@ -178,20 +180,18 @@ if st.session_state.edit_spending_id is not None:
         date_e = e5.date_input("Date", value=pd.to_datetime(row["date"]).date())
         method_e = e6.radio("Payment Method", ["Online","IBFT","Cash"], index=["Online","IBFT","Cash"].index(row["payment_method"]), horizontal=True)
 
-        e7, e8 = st.columns([1,1])
-        in_office_e = e7.selectbox("In-Office Purchase?", ["No","Yes"], index=1 if bool(row["in_office"]) else 0)
-
         bank_e_id = None
         if method_e in ("Online","IBFT"):
             banks_df = list_bank_accounts()
             bank_map = {f"{r['title']} (#{r['id']})": int(r["id"]) for _, r in banks_df.iterrows()}
             default_label = next((k for k,v in bank_map.items() if v == (row["bank_account_id"] or -1)), None)
-            bank_label_e = e8.selectbox("Bank Account Used", list(bank_map.keys()) or ["(No Banks)"], index=(list(bank_map.keys()).index(default_label) if default_label in bank_map else 0))
+            bank_label_e = st.selectbox("Bank Account Used", list(bank_map.keys()) or ["(No Banks)"],
+                                        index=(list(bank_map.keys()).index(default_label) if default_label in bank_map else 0))
             bank_e_id = bank_map[bank_label_e] if bank_map else None
         else:
             bank_e_id = None
 
-        b1, b2, b3 = st.columns([1,1,2])
+        b1, b2, _ = st.columns([1,1,2])
         save_btn = b1.form_submit_button("Save changes")
         del_btn = b2.form_submit_button("Delete", type="secondary")
 
@@ -206,8 +206,15 @@ if st.session_state.edit_spending_id is not None:
             st.error("Amount - PKR must be greater than 0."); st.stop()
 
         err = update_spending(
-            sid=sid, title=title_e, category=category_e, amount_pkr=float(pkr_e), amount_usd=usd_val,
-            dt=date_e, payment_method=method_e, bank_account_id=bank_e_id, in_office=(in_office_e=="Yes")
+            sid=sid,
+            title=title_e,
+            category=category_e,
+            amount_pkr=float(pkr_e),
+            amount_usd=usd_val,
+            dt=date_e,
+            payment_method=method_e,
+            bank_account_id=bank_e_id,
+            in_office=(in_office_e_radio == "Yes"),
         )
         if err:
             st.error(f"Update failed: {err}")
