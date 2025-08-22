@@ -12,8 +12,6 @@ from .database import get_conn, ALLOWED_TYPES, ALLOWED_PAY_METHODS, ALLOWED_SUB_
 TZ = ZoneInfo("Asia/Karachi")
 ALERT_HOUR = 21  # 9 PM PKT
 ALERT_RECIPIENT = "moiz.zulfiqar@hotmail.com"
-# GMAIL_USER = os.getenv("GMAIL_USER")
-# GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 
 GMAIL_USER = (st.secrets.get("GMAIL_USER") if hasattr(st, "secrets") else None) or os.getenv("GMAIL_USER")
 GMAIL_APP_PASS = (st.secrets.get("GMAIL_APP_PASS") if hasattr(st, "secrets") else None) or os.getenv("GMAIL_APP_PASS")
@@ -68,17 +66,47 @@ def delete_bank_account(acc_id: int) -> Optional[str]:
     return None
 
 # ---------------- SPENDINGS ----------------
-def add_spending(title:str, category:str, amount_pkr:float, amount_usd:Optional[float],
-                 dt:date, payment_method:str, bank_account_id:Optional[int]) -> Optional[str]:
+def add_spending(
+    title:str, category:str, amount_pkr:float, amount_usd:Optional[float],
+    dt:date, payment_method:str, bank_account_id:Optional[int],
+    in_office: bool
+) -> Optional[str]:
     if payment_method not in ALLOWED_PAY_METHODS: return "Invalid payment method."
     if payment_method in ("Online","IBFT") and not bank_account_id:
         return "Bank account is required for Online or IBFT payments."
     try:
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO spendings (title, category, amount_usd, amount_pkr, date, payment_method, bank_account_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
-            """, (title.strip(), category.strip(), amount_usd, amount_pkr, dt, payment_method, bank_account_id))
+                INSERT INTO spendings (title, category, amount_usd, amount_pkr, date, payment_method, bank_account_id, in_office)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (title.strip(), category.strip(), amount_usd, amount_pkr, dt, payment_method, bank_account_id, in_office))
+    except Exception as e:
+        return str(e)
+    return None
+
+def update_spending(
+    sid:int, title:str, category:str, amount_pkr:float, amount_usd:Optional[float],
+    dt:date, payment_method:str, bank_account_id:Optional[int], in_office: bool
+) -> Optional[str]:
+    if payment_method not in ALLOWED_PAY_METHODS: return "Invalid payment method."
+    if payment_method in ("Online","IBFT") and not bank_account_id:
+        return "Bank account is required for Online or IBFT payments."
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("""
+                UPDATE spendings SET
+                    title=%s, category=%s, amount_usd=%s, amount_pkr=%s,
+                    date=%s, payment_method=%s, bank_account_id=%s, in_office=%s
+                WHERE id=%s
+            """, (title.strip(), category.strip(), amount_usd, amount_pkr, dt, payment_method, bank_account_id, in_office, sid))
+    except Exception as e:
+        return str(e)
+    return None
+
+def delete_spending(sid:int) -> Optional[str]:
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM spendings WHERE id=%s", (sid,))
     except Exception as e:
         return str(e)
     return None
@@ -87,7 +115,8 @@ def get_spendings_df() -> pd.DataFrame:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT s.id, s.title, s.category, s.amount_usd, s.amount_pkr, s.date,
-                   s.payment_method::text AS payment_method, s.bank_account_id, b.title AS bank_title
+                   s.payment_method::text AS payment_method, s.bank_account_id, s.in_office,
+                   b.title AS bank_title
             FROM spendings s
             LEFT JOIN bank_accounts b ON b.id = s.bank_account_id
             ORDER BY s.date DESC, s.id DESC
@@ -95,7 +124,27 @@ def get_spendings_df() -> pd.DataFrame:
         rows = cur.fetchall()
     df = pd.DataFrame(rows)
     if df.empty:
-        return pd.DataFrame(columns=["id","title","category","amount_usd","amount_pkr","date","payment_method","bank_account_id","bank_title"])
+        return pd.DataFrame(columns=["id","title","category","amount_usd","amount_pkr","date","payment_method","bank_account_id","in_office","bank_title"])
+    df["date"] = pd.to_datetime(df["date"])
+    return df
+
+def get_spendings_month(year:int, month:int) -> pd.DataFrame:
+    """Convenience helper: current page needs month-wise view."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT s.id, s.title, s.category, s.amount_usd, s.amount_pkr, s.date,
+                   s.payment_method::text AS payment_method, s.bank_account_id, s.in_office,
+                   b.title AS bank_title
+            FROM spendings s
+            LEFT JOIN bank_accounts b ON b.id = s.bank_account_id
+            WHERE date >= DATE %s
+              AND date < (DATE %s + INTERVAL '1 month')
+            ORDER BY s.date DESC, s.id DESC
+        """, (f"{year}-{month:02d}-01", f"{year}-{month:02d}-01"))
+        rows = cur.fetchall()
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return pd.DataFrame(columns=["id","title","category","amount_usd","amount_pkr","date","payment_method","bank_account_id","in_office","bank_title"])
     df["date"] = pd.to_datetime(df["date"])
     return df
 

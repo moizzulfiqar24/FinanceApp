@@ -6,68 +6,6 @@ import psycopg
 from psycopg.rows import dict_row
 import streamlit as st     
 
-# load_dotenv()
-
-# ALLOWED_TYPES = ("Payroll", "Primary", "Secondary", "Mobile Wallet")
-# ALLOWED_PAY_METHODS = ("Online", "IBFT", "Cash")
-# ALLOWED_SUB_TYPES = ("single", "monthly", "yearly", "lifetime")
-
-# def _from_database_url():
-#     dsn = (os.getenv("DATABASE_URL") or "").strip()
-#     if not dsn:
-#         return None
-#     u = urlparse(dsn)
-#     if not (u.scheme and u.hostname):
-#         return None
-#     return dict(
-#         host=u.hostname,
-#         port=u.port or 5432,
-#         dbname=(u.path.lstrip("/") or "postgres"),
-#         user=unquote(u.username) if u.username else "postgres",
-#         password=unquote(u.password) if u.password else None,
-#     )
-
-# def _from_split_env():
-#     host = (os.getenv("DB_HOST") or "").strip()
-#     port = int(os.getenv("DB_PORT") or 5432)
-#     dbname = (os.getenv("DB_NAME") or "postgres").strip()
-#     user = (os.getenv("DB_USER") or "postgres").strip()
-#     password = os.getenv("DB_PASSWORD")
-#     if host and password:
-#         return dict(host=host, port=port, dbname=dbname, user=user, password=password)
-#     return None
-
-# def _ipv4_hostaddr(host: str, port: int) -> str | None:
-#     """Resolve an IPv4 address for host; return None if not available."""
-#     try:
-#         infos = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
-#         if infos:
-#             return infos[0][4][0]  # ip string
-#     except Exception:
-#         pass
-#     return None
-
-# def get_conn():
-#     cfg = _from_database_url() or _from_split_env()
-#     if not cfg or not cfg.get("host") or not cfg.get("password"):
-#         raise RuntimeError("Database config not found. Set DATABASE_URL, or DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD")
-
-#     # Try to resolve an IPv4 address; if found, pass via hostaddr to ensure IPv4.
-#     hostaddr = _ipv4_hostaddr(cfg["host"], cfg["port"])
-
-#     return psycopg.connect(
-#         host=cfg["host"],
-#         hostaddr=hostaddr,            # safe: if None, libpq ignores it
-#         port=cfg["port"],
-#         dbname=cfg["dbname"],
-#         user=cfg["user"],
-#         password=cfg["password"],
-#         sslmode="require",
-#         autocommit=True,
-#         row_factory=dict_row,
-#         connect_timeout=15,
-#     )
-
 load_dotenv()
 
 ALLOWED_TYPES = ("Payroll", "Primary", "Secondary", "Mobile Wallet")
@@ -118,7 +56,6 @@ def get_conn():
     cfg = _from_database_url() or _from_split_env()
     if not cfg or not cfg.get("host") or not cfg.get("password"):
         raise RuntimeError("Database config not found. Set DATABASE_URL, or DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD")
-
     hostaddr = _ipv4_hostaddr(cfg["host"], cfg["port"])
     return psycopg.connect(
         host=cfg["host"],
@@ -172,6 +109,12 @@ def init_db():
             payment_method payment_method NOT NULL,
             bank_account_id INTEGER REFERENCES bank_accounts(id) ON DELETE SET NULL
         );
+        """)
+
+        # --- NEW COLUMN: in_office (Yes/No) ---
+        cur.execute("""
+            ALTER TABLE spendings
+            ADD COLUMN IF NOT EXISTS in_office BOOLEAN NOT NULL DEFAULT FALSE;
         """)
 
         # seed banks

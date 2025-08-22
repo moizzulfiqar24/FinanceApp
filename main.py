@@ -32,31 +32,30 @@ col1.metric("Total spend (PKR)", f"{df['amount_pkr'].sum():,.0f}")
 col2.metric("Entries", f"{len(df)}")
 col3.metric("Categories", f"{df['category'].nunique()}")
 
-# By Category
-st.subheader("By Category")
+st.divider()
+
+# ---- CHART 1: Total spendings by month (bar) ----
+st.subheader("Total Spendings by Month")
+df["month"] = pd.to_datetime(df["date"]).dt.to_period("M").dt.to_timestamp()
+by_month = df.groupby("month", as_index=False)["amount_pkr"].sum().sort_values("month")
+chart_month = alt.Chart(by_month).mark_bar().encode(
+    x=alt.X("month:T", title="Month"),
+    y=alt.Y("amount_pkr:Q", title="Total PKR"),
+    tooltip=[alt.Tooltip("month:T"), alt.Tooltip("amount_pkr:Q", format=",.0f")]
+).properties(height=340)
+st.altair_chart(chart_month, use_container_width=True)
+
+st.divider()
+
+# ---- CHART 2: Total spendings by categories (bar) ----
+st.subheader("Total Spendings by Category")
 by_cat = (df.groupby("category", as_index=False)["amount_pkr"].sum()
             .sort_values("amount_pkr", ascending=False))
 chart_cat = alt.Chart(by_cat).mark_bar().encode(
     x=alt.X("category:N", sort="-y", title="Category"),
     y=alt.Y("amount_pkr:Q", title="Total PKR"),
     tooltip=["category", alt.Tooltip("amount_pkr:Q", format=",.0f")]
-).properties(height=320)
+).properties(height=340)
 st.altair_chart(chart_cat, use_container_width=True)
 
-# Daily Trend
-st.subheader("Daily Trend")
-df["date"] = pd.to_datetime(df["date"]).dt.date
-daily = df.groupby("date", as_index=False)["amount_pkr"].sum()
-chart_daily = alt.Chart(daily).mark_line(point=True).encode(
-    x=alt.X("date:T", title="Date"),
-    y=alt.Y("amount_pkr:Q", title="PKR"),
-    tooltip=[alt.Tooltip("date:T"), alt.Tooltip("amount_pkr:Q", format=",.0f")]
-).properties(height=320)
-st.altair_chart(chart_daily, use_container_width=True)
-
-# Recent
-st.subheader("Recent Entries")
-show = df[["date","title","category","amount_pkr","payment_method","bank_title"]].rename(
-    columns={"date":"Date","title":"Title","category":"Category","amount_pkr":"PKR","payment_method":"Method","bank_title":"Bank"}
-)
-st.dataframe(show, hide_index=True, use_container_width=True)
+# NOTE: Per requirement, removed all previous charts and the "Recent Entries" table from Dashboard.
